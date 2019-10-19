@@ -36,27 +36,23 @@ sidebar <- dashboardSidebar(
         
 
         #Map Layer Selection --------------------------------------------
-        shiny::actionButton( inputId = "election"
-                             , icon = icon( name = "fa-vote-yea")
-                             , label = " 2016 Votes "
-                             , style = "color: #fff; background-color: #D75453; border-color: #C73232"
-        ),
-        shiny::actionButton( inputId = "white"
-                             , icon = icon( name = "fa-vote-yea")
-                             , label = "Percent White"
-                             , style = "color: #fff; background-color: #D75453; border-color: #C73232"
-        ),
-        shiny::actionButton( inputId = "black"
-                             , icon = icon( name = "fa-vote-yea")
-                             , label = "Percent Black"
-                             , style = "color: #fff; background-color: #D75453; border-color: #C73232"
-        ),
-        shiny::actionButton( inputId = "clear"
-                             , icon = icon( name = "eraser")
-                             , label = "Clear the Map"
-                             , style = "color: #fff; background-color: #D75453; border-color: #C73232"
-        ),
+
+        actionBttn(inputId = "election", label = " 2016 Voting ", icon = NULL, style = "unite",
+                                        color = "danger", size = "md", block = FALSE, no_outline = TRUE),
+
+        bsTooltip(id = "election", title = "<strong>Be Patient</strong><br><i>Loading may take up to 30 seconds.<br>Don't click twice.</i>",
+                  placement = "right", trigger = "hover"),
+
+        actionBttn(inputId = "white", label = "Percent White", icon = NULL, style = "unite",
+                   color = "danger", size = "md", block = FALSE, no_outline = TRUE),
         
+        actionBttn(inputId = "black", label = "Percent Black", icon = NULL, style = "unite",
+                   color = "danger", size = "md", block = FALSE, no_outline = TRUE),
+        
+        actionBttn(inputId = "clear", label = "Clear Layers", icon = NULL, style = "unite",
+                   color = "danger", size = "md", block = FALSE, no_outline = TRUE),
+        
+
         prettyCheckboxGroup(inputId='season', label= h4("Season of Sighting"), choices = c('Spring','Summer','Fall','Winter'), 
                             selected = c('Spring','Summer','Fall','Winter'),
                             status = "default", shape = "curve",
@@ -64,21 +60,16 @@ sidebar <- dashboardSidebar(
                             icon = NULL, plain = FALSE, bigger = FALSE, inline = FALSE,
                             width = NULL, choiceNames = NULL, choiceValues = NULL),
         
-        #Class Selection --------------------------------------------
-        checkboxGroupButtons(
-            inputId = "class_button", label = h4("Choose Sighting Class :"), 
-            choices = c("Class A", "Class B"),
-            selected = c("Class A", "Class B"),
-            justified = TRUE, status = "primary",
-            checkIcon = list(yes = icon("ok", lib = "glyphicon"), 
-                             no = icon("remove", lib = "glyphicon"))
-        ),
+
         
-        #Class Tooltip ----------------
-        bsTooltip(id = "class_button", title = "<strong>Class A</strong><br> <i>Reports of clear sightings.</i><br><br> <strong>Class B</strong><br> <i>Observations without a clear view.</i>",
-                  placement = "bottom", trigger = "hover"),
+        #Tooltip ----------------
+
+        bsTooltip(id = "black", title = "<strong>Be Patient</strong><br><i>Loading may take up to 30 seconds.<br><br>Don't click twice.</i>",
+                  placement = "right", trigger = "hover"),
+        bsTooltip(id = "white", title = "<strong>Be Patient</strong><br><i>Loading may take up to 30 seconds.<br><br>Don't click twice.</i>",
+                  placement = "right", trigger = "hover"),
         
-        downloadButton("downloadData", "Download Data")
+        downloadButton("downloadData", "Download")
     
     )
 )
@@ -107,9 +98,17 @@ body <- dashboardBody(
         tabItem("intro",
                 fluidPage(
                   column(
-                    width = 10
+                    width = 8
                     , leaflet::leafletOutput( outputId = "map"
-                                              , height = 700,
+                                              , height = 800,
+                    )
+                  ),
+                  column(width = 4,
+                    fluidRow(
+                      box(plotlyOutput("plot_race"), width = 12)
+                    ),
+                    fluidRow(
+                      box(plotlyOutput("plot_voting"), width = 12)
                     )
                   )
                 ) # end of the box
@@ -134,25 +133,11 @@ server <- function(input, output) {
       paste("Allegheny16-", Sys.Date(), ".csv", sep="")
     },
     content = function(file) {
-      write.csv(a_data, file)
+      write.csv(data, file)
     }
   )
     
-    #Error if no Season is chosen
-    observeEvent(input$season, ignoreNULL = FALSE,{
-        if (length(input$season)==0) {
-            shinyalert("Oh No!", "The Sasquatch may just hibernate or go south if you don't choose a season.", type = "warning")
-        }
-    }
-    )
-    
-    #Error if no Class is chosen 
-    observeEvent(input$class_button, ignoreNULL = FALSE,{
-        if (length(input$class_button)==0) {
-            shinyalert("Oops!", "You won't have any sightings if you don't pick at least one class.", type = "error")
-        }
-    }
-    )
+
     
 
     # create foundational map
@@ -202,7 +187,7 @@ observeEvent(input$election, {
                                                    color = "white",
                                                    fillOpacity = 0.7,
                                                    bringToFront = TRUE)
-               # , layerId = unique(a_data@data$OBJECTID_1)
+               , layerId = unique(a_data@data$OBJECTID_1)
                # , group = "click.list"
   )
 })    
@@ -224,7 +209,7 @@ observeEvent(input$white, {
                                                      color = "white",
                                                      fillOpacity = 0.7,
                                                      bringToFront = TRUE)
-                 # , layerId = unique(a_data@data$OBJECTID_1)
+                 , layerId = unique(a_data@data$OBJECTID_1)
                  # , group = "click.list"
     )
 })    
@@ -246,16 +231,54 @@ observeEvent(input$black, {
                                                      color = "white",
                                                      fillOpacity = 0.7,
                                                      bringToFront = TRUE)
-                 # , layerId = unique(a_data@data$OBJECTID_1)
+                 , layerId = unique(a_data@data$OBJECTID_1)
                  # , group = "click.list"
     )
 })    
 
 observeEvent(input$clear, {
-  leafletProxy('map') %>% clearShapes() 
-    
-})    
+  leafletProxy('map') %>% clearShapes()
 
+})
+
+observe({
+  validate(
+    need(input$map_shape_click, "Click on the Map for more Info"))
+  event <- input$map_shape_click
+  # if (is.null(event))
+  #   return()
+
+  # Filtering and plotting
+  x <- a_data@data[a_data@data$OBJECTID_1 == event$id, ]
+
+  output$plot_race <- renderPlotly({
+    p <- plot_ly(
+      x = c("% White", "% Black", "% Other Race"),
+      y = c(x$X.WHITE, x$X.BLACK,x$X.ORACE),
+      name = "Voting Ward Race",
+      type = "bar",
+      marker = list(color = c('#ffa200', '#018023', '#80017a'))
+    )%>% layout(
+      title = paste(x$MCD_NAME, x$VTD_NAME, 'Race'),
+         xaxis = list(title = "Race"),
+        yaxis = list(title = "Percent"))
+      
+    
+  })
+  output$plot_voting <- renderPlotly({
+    p <- plot_ly(
+      x = c("% Dem", "% Rep", "% Other"),
+      y = c(x$X.DEM, x$X.REP,x$X.OTH),
+      name = "Voting Ward Percent",
+      type = "bar",
+      marker = list(color = c("#2aa1ec", "#fe6a59", '#14b83a'))
+    )%>% layout(
+      title = paste(x$MCD_NAME, x$VTD_NAME, 'Voting'),
+      xaxis = list(title = "Party"),
+      yaxis = list(title = "Percent"))
+    
+  })
+})
     # observe({
     #   pal <- colorpal()
     #   
@@ -285,13 +308,10 @@ observeEvent(input$clear, {
     )
     
     # Aggregating sightings by state for plotting --------------------------
-    state_count <- reactive({count <- aggregate(x = data()[c('State','Year')],
-                                                by = list(states = data()$State),FUN = length)
-    colnames(count) <- c('State', 'Count','Year')
-    count <- count[order(count$Year),]
-    count
-    
-    })
+    # one_row <- reactive({row_t <- a_data@data[a_data@data$OBJECTID_1 == id_val()]
+    # row_t
+    # 
+    # })
     
     # Aggregating sightings by year for plotting --------------------------
     year_count <- reactive({count <- aggregate(x = data()[c('State','Year')],
@@ -324,20 +344,11 @@ observeEvent(input$clear, {
     
     # Data table of Bigfoot Sightings ----------------------------------------------
     output$table <- DT::renderDataTable({
-        data()
+        one_row()
     })
     
     # A plot showing sightings by state -----------------------------    
-    output$plot_state <- renderPlotly({
-        ggplotly(  
-            p1 <- ggplot(state_count(), aes(x = reorder(State, -Count), y = Count, label=State)) +
-                geom_bar(stat = "identity", width = 0.8, color='darkgreen', fill='forestgreen')+
-                theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
-                ggtitle('Bigfoot Sightings By State')+
-                xlab("State") + 
-                ylab("Count of Sightings"), tooltip=c('label','y')
-        )
-    })
+
     
     # A plot showing sightings by year -----------------------------    
     output$plot_year <- renderPlotly({
