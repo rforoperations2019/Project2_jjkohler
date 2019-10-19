@@ -6,14 +6,24 @@ library(dplyr)
 library(plotly)
 library(shinythemes)
 library(shinyWidgets)
-library(shinyalert)
-library(shinyBS)
+library(proj4)
 library(htmltools)
 
 
 # Pulling from an API ---------------------- 
 # Because APIs are COOL ---------------------------------
-# a_poll <- readOGR("https://services1.arcgis.com/vdNDkVykv9vEWFX4/ArcGIS/rest/services/Allegheny_County_Polling_Places_May2019/FeatureServer/0/query?where=OBJECTID_1+%3E+0&objectIds=&time=&geometry=&geometryType=esriGeometryPoint&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&returnGeodetic=false&outFields=*&returnGeometry=true&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=")
+a_poll <- readOGR("https://services1.arcgis.com/vdNDkVykv9vEWFX4/ArcGIS/rest/services/Allegheny_County_Polling_Places_May2019/FeatureServer/0/query?where=OBJECTID_1+%3E+0&objectIds=&time=&geometry=&geometryType=esriGeometryPoint&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&returnGeodetic=false&outFields=*&returnGeometry=true&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pgeojson&token=")
+
+xy <- a_poll@data %>% select(POINT_X,POINT_Y,OBJECTID_1)
+#assign projection
+proj4string <- "+proj=lcc +lat_1=40.96666666666667 +lat_2=39.93333333333333 +lat_0=39.33333333333334 +lon_0=-77.75 +x_0=600000 +y_0=0 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=us-ft +no_defs"
+#project point data
+pj <- project(xy, proj4string, inverse=TRUE)
+#create latlon
+points <- data.frame(xy, lat=pj$y, lon=pj$x)
+#merge
+final <-  merge(a_poll@data, points, by.x = "OBJECTID_1", by.y = "OBJECTID_1")
+
 
 a_data <- readOGR('VTDs_Oct17.shp')
 
@@ -26,7 +36,6 @@ header <- dashboardHeader(title = "Allegheny 2016"
 # Sidebar with a slider input for number of bins 
 # Dashboard Sidebar ----------------------------------------------
 sidebar <- dashboardSidebar(
-    useShinyalert(),
     sidebarMenu(
         id = "tabs",
         
@@ -35,39 +44,22 @@ sidebar <- dashboardSidebar(
         menuItem("Data Table", icon = icon("table"), tabName = "table"),
         
 
-        #Map Layer Selection --------------------------------------------
+        #Map Layer Selection Buttons --------------------------------------------
 
         actionBttn(inputId = "election", label = " 2016 Voting ", icon = NULL, style = "unite",
-                                        color = "danger", size = "md", block = FALSE, no_outline = TRUE),
-
-        bsTooltip(id = "election", title = "<strong>Be Patient</strong><br><i>Loading may take up to 30 seconds.<br>Don't click twice.</i>",
-                  placement = "right", trigger = "hover"),
+                    color = "danger", size = "sm", block = FALSE, no_outline = TRUE),
 
         actionBttn(inputId = "white", label = "Percent White", icon = NULL, style = "unite",
-                   color = "danger", size = "md", block = FALSE, no_outline = TRUE),
+                   color = "danger", size = "sm", block = FALSE, no_outline = TRUE),
         
         actionBttn(inputId = "black", label = "Percent Black", icon = NULL, style = "unite",
-                   color = "danger", size = "md", block = FALSE, no_outline = TRUE),
+                   color = "danger", size = "sm", block = FALSE, no_outline = TRUE),
+        
+        actionBttn(inputId = "polls", label = "Poll Locations", icon = NULL, style = "unite",
+                   color = "danger", size = "sm", block = FALSE, no_outline = TRUE),
         
         actionBttn(inputId = "clear", label = "Clear Layers", icon = NULL, style = "unite",
-                   color = "danger", size = "md", block = FALSE, no_outline = TRUE),
-        
-
-        prettyCheckboxGroup(inputId='season', label= h4("Season of Sighting"), choices = c('Spring','Summer','Fall','Winter'), 
-                            selected = c('Spring','Summer','Fall','Winter'),
-                            status = "default", shape = "curve",
-                            outline = FALSE, fill = FALSE, thick = TRUE, animation = 'pulse',
-                            icon = NULL, plain = FALSE, bigger = FALSE, inline = FALSE,
-                            width = NULL, choiceNames = NULL, choiceValues = NULL),
-        
-
-        
-        #Tooltip ----------------
-
-        bsTooltip(id = "black", title = "<strong>Be Patient</strong><br><i>Loading may take up to 30 seconds.<br><br>Don't click twice.</i>",
-                  placement = "right", trigger = "hover"),
-        bsTooltip(id = "white", title = "<strong>Be Patient</strong><br><i>Loading may take up to 30 seconds.<br><br>Don't click twice.</i>",
-                  placement = "right", trigger = "hover"),
+                   color = "danger", size = "sm", block = FALSE, no_outline = TRUE),
         
         downloadButton("downloadData", "Download")
     
@@ -98,11 +90,13 @@ body <- dashboardBody(
         tabItem("intro",
                 fluidPage(
                   column(
-                    width = 8
-                    , leaflet::leafletOutput( outputId = "map"
+                    width = 8,
+                    fluidRow(
+                    leaflet::leafletOutput( outputId = "map"
                                               , height = 800,
-                    )
-                  ),
+                    ),
+                    fluidRow(h5("<strong>Please Be Patient.</strong> App response time is very slow. After clicking on a layer button don't click twice - wait for original selection to load before proceeding. <br> Click on the loaded map layers to activate plots."))
+                  )),
                   column(width = 4,
                     fluidRow(
                       box(plotlyOutput("plot_race"), width = 12)
@@ -114,8 +108,7 @@ body <- dashboardBody(
                 ) # end of the box
         
         ),
-
-        # Data Table Page ----------------------------------------------
+# Data Table Page ----------------------------------------------
         tabItem("table",
                 fluidPage(
                     box(title = "Allegheny County 2016 Statistics", DT::dataTableOutput("table"), width = 9))
@@ -126,8 +119,9 @@ body <- dashboardBody(
 ui <- dashboardPage(header, sidebar, body, skin='blue')
 
 # Define server function -----
+
 server <- function(input, output) {
-  
+# Allow Data Download ------------------------------------------------  
   output$downloadData <- downloadHandler(
     filename = function() {
       paste("Allegheny16-", Sys.Date(), ".csv", sep="")
@@ -138,9 +132,7 @@ server <- function(input, output) {
   )
     
 
-    
-
-    # create foundational map
+# create foundational map------------------------------
 
     foundational.map <- shiny::reactive({
       leaflet(options = leafletOptions(zoomSnap=0.1)) %>%
@@ -158,8 +150,12 @@ server <- function(input, output) {
 
     
 # Reference: rpubs.com/bhaskarvk/electoral-Map-2016
+# Set Color Pallete for Votting Map --------------------------------
+    
     dempal <- colorFactor(c("#2aa1ec", "#fe6a59"), a_data@data$WIN)
 # HTML Labels: https://stackoverflow.com/questions/43144596/r-and-leaflet-how-to-arrange-label-text-across-multiple-lines
+    
+#Define Hover Labels ---------------------------------------------------------
     
 labs <- lapply(seq(nrow(a_data@data)), function(i) {
       paste0("<strong>", a_data@data[i, "MCD_NAME"],"</strong><br>",
@@ -171,6 +167,8 @@ labs <- lapply(seq(nrow(a_data@data)), function(i) {
              "<strong>Black: </strong>", a_data@data[i, "X.BLACK"]*100, "% <br>",
              sep='') 
     })
+    
+#Button Inputs -------------------------------------------
     
 observeEvent(input$election, {
   leafletProxy('map') %>% clearShapes() %>%
@@ -232,8 +230,17 @@ observeEvent(input$black, {
                                                      fillOpacity = 0.7,
                                                      bringToFront = TRUE)
                  , layerId = unique(a_data@data$OBJECTID_1)
-                 # , group = "click.list"
+                 )
+})    
+
+observeEvent(input$polls, {
+  leafletProxy('map') %>% 
+    addCircleMarkers(data=final,
+      radius = 3,
+      color = 'darkred',
+      stroke = FALSE, fillOpacity = 0.6, label= ~LocName
     )
+  
 })    
 
 observeEvent(input$clear, {
@@ -241,16 +248,17 @@ observeEvent(input$clear, {
 
 })
 
+#Observe Map Clicks and Generate Plots -----------------------------
+
 observe({
   validate(
     need(input$map_shape_click, "Click on the Map for more Info"))
   event <- input$map_shape_click
-  # if (is.null(event))
-  #   return()
 
   # Filtering and plotting
   x <- a_data@data[a_data@data$OBJECTID_1 == event$id, ]
-
+  
+  #Race Bar Chart
   output$plot_race <- renderPlotly({
     p <- plot_ly(
       x = c("% White", "% Black", "% Other Race"),
@@ -265,8 +273,10 @@ observe({
       
     
   })
+  
+  #Voting Bar Chart
   output$plot_voting <- renderPlotly({
-    p <- plot_ly(
+    p1 <- plot_ly(
       x = c("% Dem", "% Rep", "% Other"),
       y = c(x$X.DEM, x$X.REP,x$X.OTH),
       name = "Voting Ward Percent",
@@ -279,120 +289,21 @@ observe({
     
   })
 })
-    # observe({
-    #   pal <- colorpal()
-    #   
-    #   leafletProxy("map", data = filteredData()) %>%
-    #     clearShapes() %>%
-    #     addCircles(radius = ~10^mag/10, weight = 1, color = "#777777",
-    #                fillColor = ~pal(mag), fillOpacity = 0.7, popup = ~paste(mag)
-    #     )
-    # })
-    
-    #Filter data table from inputs--------------------------
-    
+
+#Generate Simplified Data Table --------------------------------    
     data <- reactive({
-        #Check for existence of inputs --------------------------
-        # validate(
-        #     need(input$class_button, "Select at least one Class"),
-        #     need(input$season, "Select at least one Season")
-        # )
         sub <- subset(a_data@data, select = c("COUNTYNAME","MCD_NAME", "VTD_NAME", "VAPERSONS", "T16PRESD","T16PRESR", "T16PRESOTH", "X.DEM",      "X.REP","X.OTH","X.WHITE","X.BLACK","X.ORACE"  )) 
         colnames(sub) <- c("County","Municipality","Ward/Dist","Voting Age","Dem","Rep","Other","% Dem","% Rep","% Oth","% White","% Black",    "% Oth Race"   )
-        # sub <- sub[(sub['Year'] >= input$slider2[1]) & (sub['Year'] <= input$slider2[2]),]
-        # sub <- subset(sub, Class %in% input$class_button)
-        # sub <- subset(sub, Season %in% input$season)
         sub
         
     }
     )
     
-    # Aggregating sightings by state for plotting --------------------------
-    # one_row <- reactive({row_t <- a_data@data[a_data@data$OBJECTID_1 == id_val()]
-    # row_t
-    # 
-    # })
-    
-    # Aggregating sightings by year for plotting --------------------------
-    year_count <- reactive({count <- aggregate(x = data()[c('State','Year')],
-                                               by = list(years = data()$Year),FUN = length)
-    colnames(count) <- c('Year', 'Count','State')
-    count <- count[order(count$Year),]
-    count
-    
-    })
-    
-    # Aggregating sightings by month for plotting --------------------------
-    month_count <- reactive({count <- aggregate(x = data()[c('State','Month')],
-                                                by = list(months = data()$Month),FUN = length)
-    colnames(count) <- c('Month1','Count','State')
-    count <- count[order(count$Month1),]
-    count$Month <- month.abb[count$Month1]
-    count
-    
-    })
-    
-    # Aggregating sightings by month for sorted by value --------------------------
-    month_max <- reactive({count <- aggregate(x = data()[c('State','Month')],
-                                              by = list(months = data()$Month),FUN = length)
-    colnames(count) <- c('Month1','Count','State')
-    count <- count[order(count$Count),]
-    count$Month <- month.name[count$Month1]
-    count
-    
-    })
-    
-    # Data table of Bigfoot Sightings ----------------------------------------------
-    output$table <- DT::renderDataTable({
-        one_row()
-    })
-    
-    # A plot showing sightings by state -----------------------------    
 
     
-    # A plot showing sightings by year -----------------------------    
-    output$plot_year <- renderPlotly({
-        ggplotly(  
-            p2 <- ggplot(year_count(), aes(x = Year, y = Count, label=Year)) +
-                geom_line(color='forestgreen') + geom_point(color='saddlebrown', stroke='forestgreen') +
-                theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
-                ggtitle('Yearly Sasquatches')+
-                xlab("Year") + 
-                ylab("Count of Sightings"), tooltip=c('label','y')
-        )
-    })
-    
-    # A plot showing sightings by month -----------------------------    
-    output$plot_month<- renderPlotly({
-        ggplotly(  
-            p3 <- ggplot(month_count(), aes(x = reorder(Month, -Month1), y = Count, label=Month)) +
-                geom_bar(stat = "identity", width = 0.8, color='darkgreen', fill='saddlebrown')+
-                theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
-                ggtitle("Bigfoot's Favorite Month")+
-                xlab("Month") + 
-                ylab("Count of Sightings") +
-                coord_flip(), tooltip=c('label','y') 
-        )
-    })
-    
-    
-    # Value Boxes ----------------------------------------------
-    output$count <- renderValueBox({
-        val <- length(data()$Date)
-        valueBox(subtitle = "Total Sightings", value = val, icon = icon("tree"), color = "green")
-    })
-    
-    output$month <- renderInfoBox({
-        val <- tail(month_max()$State, n=1)
-        mn <- tail(month_max()$Month, n=1)
-        
-        infoBox("Peak Month", value = mn, subtitle = paste(val, " Sightings", sep = ''), icon = icon("calendar-alt"), color = "olive")
-    })    
-    
-    output$state <- renderValueBox({
-        st <- tail(state_count()$State, n=1)
-        val <- tail(state_count()$Count, n=1)
-        valueBox(subtitle = paste("Top State with", val,'Sightings'), value = st, icon = icon("flag"), color = "green")
+# Data table of Allegheny County Data ----------------------------------------------
+    output$table <- DT::renderDataTable({
+        data()
     })
     
 
