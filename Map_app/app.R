@@ -40,7 +40,12 @@ sidebar <- dashboardSidebar(
                     max = 2018, value = c(1920, 2018), sep = ''),
         
         #Season Selection --------------------------------------------
-        shiny::actionButton( inputId = "clearHighlight"
+        shiny::actionButton( inputId = "election"
+                             , icon = icon( name = "fa-vote-yea")
+                             , label = "Show 2016 Votes"
+                             , style = "color: #fff; background-color: #D75453; border-color: #C73232"
+        ),
+        shiny::actionButton( inputId = "clear"
                              , icon = icon( name = "eraser")
                              , label = "Clear the Map"
                              , style = "color: #fff; background-color: #D75453; border-color: #C73232"
@@ -94,7 +99,7 @@ body <- dashboardBody(
                 fluidPage(
                   column(
                     width = 10
-                    , leaflet::leafletOutput( outputId = "myMap"
+                    , leaflet::leafletOutput( outputId = "map"
                                               , height = 850
                     )
                   )
@@ -105,7 +110,7 @@ body <- dashboardBody(
         # Data Table Page ----------------------------------------------
         tabItem("table",
                 fluidPage(
-                    box(title = "Allegheny County Election Year Statistics", DT::dataTableOutput("table"), width = 9))
+                    box(title = "Allegheny County 2016 Statistics", DT::dataTableOutput("table"), width = 9))
         )
     )
 )
@@ -143,25 +148,10 @@ server <- function(input, output) {
     
     # create foundational map
     
-    # "hsla(0, 91%, 44%, 0.85)",
-    # 0.10,
-    # "hsla(0, 91%, 44%, 0.75)",
-    # 0.25,
-    # "hsla(0, 91%, 44%, 0.65)",
-    # 0.35,
-    # "hsla(0, 91%, 44%, 0.45)",
-    # 0.5,
-    # "hsla(219, 78%, 53%, 0.45)",
-    # 0.65,
-    # "hsla(219, 78%, 53%, 0.65)",
-    # 0.75,
-    # "hsla(219, 78%, 53%, 0.75)",
-    # 0.9,
-    # "hsla(219, 78%, 53%, 0.85)",
-    # 1,
-    # "hsla(219, 78%, 53%, 0.85)"
-    # ]
-dempal <- colorFactor(c("#2aa1ec", "#fe6a59"), a_data@data$WIN)
+# Reference: rpubs.com/bhaskarvk/electoral-Map-2016
+    dempal <- colorFactor(c("#2aa1ec", "#fe6a59"), a_data@data$WIN)
+# HTML Labels: https://stackoverflow.com/questions/43144596/r-and-leaflet-how-to-arrange-label-text-across-multiple-lines
+    
 labs <- lapply(seq(nrow(a_data@data)), function(i) {
   paste0("<strong>", a_data@data[i, "MCD_NAME"],"</strong><br>",
                 a_data@data[i, "VTD_NAME"],"<br><br>",
@@ -175,24 +165,67 @@ labs <- lapply(seq(nrow(a_data@data)), function(i) {
         addTiles( urlTemplate = "https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png") %>%
         setView( lng = -79.9959
                  , lat = 40.4406
-                 , zoom = 11 ) %>%
-        addPolygons( data = a_data,
-                     fillColor= ~dempal(WIN),
-                     fillOpacity = ~ifelse(WIN=='D',(X.DEM),
-                                             (X.REP))
-                     , opacity = ~ifelse(WIN=='D',(X.DEM)-0.1,
-                                         (X.REP)-0.1),
-                     weight = 3,
-                     color = ~dempal(WIN),
-                     label= lapply(labs, htmltools::HTML),
-                     highlightOptions = highlightOptions(weight = 5,
-                    color = "white",
-                     fillOpacity = 0.7,
-                     bringToFront = TRUE)
-                    , layerId = a_data@polygons
-                     # , group = "click.list"
-        )
+                 , zoom = 11 ) 
+      # %>%
+        # addPolygons( data = a_data,
+        #              fillColor= ~dempal(WIN),
+        #              fillOpacity = ~ifelse(WIN=='D',(X.DEM),
+        #                                      (X.REP))
+        #              , opacity = ~ifelse(WIN=='D',(X.DEM)-0.2,
+        #                                  (X.REP)-0.2),
+        #              weight = 2,
+        #              color = ~dempal(WIN),
+        #              label= lapply(labs, htmltools::HTML),
+        #              highlightOptions = highlightOptions(weight = 5,
+        #             color = "white",
+        #              fillOpacity = 0.7,
+        #              bringToFront = TRUE)
+        #             , layerId = a_data@polygons
+        #              # , group = "click.list"
+        # )
     })
+    
+    output$map <- renderLeaflet({
+      
+      foundational.map()
+      
+    }) # end of leaflet::renderLeaflet({})
+    # layerId = unique(x$layerId))
+# })
+observeEvent(input$election, {
+  leafletProxy('map') %>% clearShapes() %>%
+  addPolygons( data = a_data,
+               fillColor= ~dempal(WIN),
+               fillOpacity = ~ifelse(WIN=='D',(X.DEM),
+                                     (X.REP))
+               , opacity = ~ifelse(WIN=='D',(X.DEM)-0.2,
+                                   (X.REP)-0.2),
+               weight = 2,
+               color = ~dempal(WIN),
+               label= lapply(labs, htmltools::HTML),
+               highlightOptions = highlightOptions(weight = 5,
+                                                   color = "white",
+                                                   fillOpacity = 0.7,
+                                                   bringToFront = TRUE)
+               # , layerId = unique(a_data@data$OBJECTID_1)
+               # , group = "click.list"
+  )
+})    
+
+observeEvent(input$clear, {
+  leafletProxy('map') %>% clearShapes() 
+    
+})    
+
+    # observe({
+    #   pal <- colorpal()
+    #   
+    #   leafletProxy("map", data = filteredData()) %>%
+    #     clearShapes() %>%
+    #     addCircles(radius = ~10^mag/10, weight = 1, color = "#777777",
+    #                fillColor = ~pal(mag), fillOpacity = 0.7, popup = ~paste(mag)
+    #     )
+    # })
     
     #Filter data table from inputs--------------------------
     
@@ -312,76 +345,7 @@ labs <- lapply(seq(nrow(a_data@data)), function(i) {
         valueBox(subtitle = paste("Top State with", val,'Sightings'), value = st, icon = icon("flag"), color = "green")
     })
     
-    output$myMap <- renderLeaflet({
-      
-      foundational.map()
-      
-    }) # end of leaflet::renderLeaflet({})
-    
-    # store the list of clicked polygons in a vector
-    click.list <- shiny::reactiveValues( ids = vector() )
-    
-    # observe where the user clicks on the leaflet map
-    # during the Shiny app session
-    # Courtesy of two articles:
-    # https://stackoverflow.com/questions/45953741/select-and-deselect-polylines-in-shiny-leaflet
-    # https://rstudio.github.io/leaflet/shiny.html
-    shiny::observeEvent( input$myMap_shape_click, {
-      
-      # store the click(s) over time
-      click <- input$myMap_shape_click
-      
-      # store the polygon ids which are being clicked
-      click.list$ids <- c( click.list$ids, click$id )
-      
-      # filter the spatial data frame
-      # by only including polygons
-      # which are stored in the click.list$ids object
-      lines.of.interest <- a_data[ which( a_data@data$OBJECTID_1 %in% click.list$ids ) , ]
-      
-      # if statement
-      if( is.null( click$id ) ){
-        # check for required values, if true, then the issue
-        # is "silent". See more at: ?req
-        req( click$id )
-        
-      } else if( !click$id %in% lines.of.interest@data$id ){
-        
-        # call the leaflet proxy
-        leaflet::leafletProxy( mapId = "myMap" ) %>%
-          # and add the polygon lines
-          # using the data stored from the lines.of.interest object
-          addPolylines( data = lines.of.interest
-                        , layerId = lines.of.interest@data$id
-                        , color = "#6cb5bc"
-                        , weight = 5
-                        , opacity = 1
-          ) 
-        
-      } # end of if else statement
-      
-    }) # end of shiny::observeEvent({})
-    
-    
-    # Create the logic for the "Clear the map" action button
-    # which will clear the map of all user-created highlights
-    # and display a clean version of the leaflet map
-    shiny::observeEvent( input$clearHighlight, {
-      
-      # recreate $myMap
-      output$myMap <- leaflet::renderLeaflet({
-        
-        # first
-        # set the reactive value of click.list$ids to NULL
-        click.list$ids <- NULL
-        
-        # second
-        # recall the foundational.map() object
-        foundational.map()
-        
-      }) # end of re-rendering $myMap
-      
-    }) # end of clearHighlight action button logic
+
     
 }
 # Run the application ----------------------------------------------
