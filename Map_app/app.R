@@ -8,6 +8,7 @@ library(shinythemes)
 library(shinyWidgets)
 library(shinyalert)
 library(shinyBS)
+library(htmltools)
 
 
 # Pulling from an API ---------------------- 
@@ -30,9 +31,8 @@ sidebar <- dashboardSidebar(
         id = "tabs",
         
         # # Menu Items ----------------------------------------------
-        menuItem("Bigfoot at a Glance", icon = icon("tree"), tabName = "intro"),
-        menuItem("Bigfeet Plots", icon = icon("bar-chart"), tabName = "plot"),
-        menuItem("Sasquatch Table", icon = icon("table"), tabName = "table"),
+        menuItem("County Map", icon = icon("tree"), tabName = "intro"),
+        menuItem("Data Table", icon = icon("table"), tabName = "table"),
         
         #Year Selection ----------------------------------------------
         chooseSliderSkin("HTML5", color="SaddleBrown"),
@@ -101,23 +101,11 @@ body <- dashboardBody(
                 ) # end of the box
         
         ),
-        # Plot page ----------------------------------------------
-        tabItem("plot",
-                
-                
-                # Plots ----------------------------------------------
-                fluidRow(
-                    box(plotlyOutput("plot_state"), width = 9)),
-                fluidRow(
-                    box(plotlyOutput("plot_year"), width = '6'),
-                    box(plotlyOutput("plot_month"), width = '3')
-                )
-        ),
-        
+
         # Data Table Page ----------------------------------------------
         tabItem("table",
                 fluidPage(
-                    box(title = "Reported Bigfoot Sightings", DT::dataTableOutput("table"), width = 9))
+                    box(title = "Allegheny County Election Year Statistics", DT::dataTableOutput("table"), width = 9))
         )
     )
 )
@@ -173,23 +161,30 @@ server <- function(input, output) {
     # 1,
     # "hsla(219, 78%, 53%, 0.85)"
     # ]
-dempal <- colorNumeric(
-  c('#cd0404','#dd89f0','#0b55e0'),
-  domain = c(0,0.5,1))
+dempal <- colorFactor(c("#2aa1ec", "#fe6a59"), a_data@data$WIN)
+labs <- lapply(seq(nrow(a_data@data)), function(i) {
+  paste0("<strong>", a_data@data[i, "MCD_NAME"],"</strong><br>",
+                a_data@data[i, "VTD_NAME"],"<br><br>",
+                "<strong>Dem: </strong>", a_data@data[i, "X.DEM"]*100, "% <br>",
+                "<strong>Rep: </strong>", a_data@data[i, "X.REP"]*100, "% <br>",
+                "<strong>Oth: </strong>", a_data@data[i, "X.OTH"]*100, "% <br>", sep='') 
+})
 
     foundational.map <- shiny::reactive({
       leaflet(options = leafletOptions(zoomSnap=0.1)) %>%
         addTiles( urlTemplate = "https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png") %>%
         setView( lng = -79.9959
                  , lat = 40.4406
-                 , zoom = 10 ) %>%
-        addPolygons( data = a_data
-                     , fillOpacity = .9
-                     , opacity = 0.3,
-                     weight = 2,
-                     color = 'darkgray',
-                     popup = ~as.character(a_data@data$X.DEM),
-                     fillColor = ~dempal(a_data@data$X.DEM),
+                 , zoom = 11 ) %>%
+        addPolygons( data = a_data,
+                     fillColor= ~dempal(WIN),
+                     fillOpacity = ~ifelse(WIN=='D',(X.DEM),
+                                             (X.REP))
+                     , opacity = ~ifelse(WIN=='D',(X.DEM)-0.1,
+                                         (X.REP)-0.1),
+                     weight = 3,
+                     color = ~dempal(WIN),
+                     label= lapply(labs, htmltools::HTML),
                      highlightOptions = highlightOptions(weight = 5,
                     color = "white",
                      fillOpacity = 0.7,
