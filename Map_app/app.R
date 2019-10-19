@@ -1,5 +1,6 @@
 library(shiny)
 library(shinydashboard)
+library(devtools)
 library(reshape2)
 library(dplyr)
 library(plotly)
@@ -39,6 +40,12 @@ sidebar <- dashboardSidebar(
                     max = 2018, value = c(1920, 2018), sep = ''),
         
         #Season Selection --------------------------------------------
+        shiny::actionButton( inputId = "clearHighlight"
+                             , icon = icon( name = "eraser")
+                             , label = "Clear the Map"
+                             , style = "color: #fff; background-color: #D75453; border-color: #C73232"
+        ),
+        
         prettyCheckboxGroup(inputId='season', label= h4("Season of Sighting"), choices = c('Spring','Summer','Fall','Winter'), 
                             selected = c('Spring','Summer','Fall','Winter'),
                             status = "default", shape = "curve",
@@ -85,19 +92,14 @@ body <- dashboardBody(
         # Intro page ----------------------------------------------
         tabItem("intro",
                 fluidPage(
-                    fluidRow(column(4,
-                                    imageOutput("image"))
-                             
-                    ),
-                    
-                    fluidRow(
-                        valueBoxOutput("count")),
-                    fluidRow(
-                        infoBoxOutput("month")),
-                    fluidRow(
-                        valueBoxOutput("state"))
-                    
-                )
+                  column(
+                    width = 10
+                    , leaflet::leafletOutput( outputId = "myMap"
+                                              , height = 850
+                    )
+                  )
+                ) # end of the box
+        
         ),
         # Plot page ----------------------------------------------
         tabItem("plot",
@@ -143,13 +145,59 @@ server <- function(input, output) {
     
     #Render Sasquatch image for landing page
     
-    output$image <- renderImage({
-        return(list(
-            src = "sasquatch.jpg",
-            contentType = 'image/jpeg',
-            alt = "Is this Bigfoot?"
-        ))
-    }, deleteFile = FALSE)
+    # output$image <- renderImage({
+    #     return(list(
+    #         src = "sasquatch.jpg",
+    #         contentType = 'image/jpeg',
+    #         alt = "Is this Bigfoot?"
+    #     ))
+    # }, deleteFile = FALSE)
+    
+    # create foundational map
+    
+    # "hsla(0, 91%, 44%, 0.85)",
+    # 0.10,
+    # "hsla(0, 91%, 44%, 0.75)",
+    # 0.25,
+    # "hsla(0, 91%, 44%, 0.65)",
+    # 0.35,
+    # "hsla(0, 91%, 44%, 0.45)",
+    # 0.5,
+    # "hsla(219, 78%, 53%, 0.45)",
+    # 0.65,
+    # "hsla(219, 78%, 53%, 0.65)",
+    # 0.75,
+    # "hsla(219, 78%, 53%, 0.75)",
+    # 0.9,
+    # "hsla(219, 78%, 53%, 0.85)",
+    # 1,
+    # "hsla(219, 78%, 53%, 0.85)"
+    # ]
+dempal <- colorNumeric(
+  c('#cd0404','#dd89f0','#0b55e0'),
+  domain = c(0,0.5,1))
+
+    foundational.map <- shiny::reactive({
+      leaflet(options = leafletOptions(zoomSnap=0.1)) %>%
+        addTiles( urlTemplate = "https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png") %>%
+        setView( lng = -79.9959
+                 , lat = 40.4406
+                 , zoom = 10 ) %>%
+        addPolygons( data = a_data
+                     , fillOpacity = .9
+                     , opacity = 0.3,
+                     weight = 2,
+                     color = 'darkgray',
+                     popup = ~as.character(a_data@data$X.DEM),
+                     fillColor = ~dempal(a_data@data$X.DEM),
+                     highlightOptions = highlightOptions(weight = 5,
+                    color = "white",
+                     fillOpacity = 0.7,
+                     bringToFront = TRUE)
+                    , layerId = a_data@polygons
+                     # , group = "click.list"
+        )
+    })
     
     #Filter data table from inputs--------------------------
     
@@ -268,6 +316,77 @@ server <- function(input, output) {
         val <- tail(state_count()$Count, n=1)
         valueBox(subtitle = paste("Top State with", val,'Sightings'), value = st, icon = icon("flag"), color = "green")
     })
+    
+    output$myMap <- renderLeaflet({
+      
+      foundational.map()
+      
+    }) # end of leaflet::renderLeaflet({})
+    
+    # store the list of clicked polygons in a vector
+    click.list <- shiny::reactiveValues( ids = vector() )
+    
+    # observe where the user clicks on the leaflet map
+    # during the Shiny app session
+    # Courtesy of two articles:
+    # https://stackoverflow.com/questions/45953741/select-and-deselect-polylines-in-shiny-leaflet
+    # https://rstudio.github.io/leaflet/shiny.html
+    shiny::observeEvent( input$myMap_shape_click, {
+      
+      # store the click(s) over time
+      click <- input$myMap_shape_click
+      
+      # store the polygon ids which are being clicked
+      click.list$ids <- c( click.list$ids, click$id )
+      
+      # filter the spatial data frame
+      # by only including polygons
+      # which are stored in the click.list$ids object
+      lines.of.interest <- a_data[ which( a_data@data$OBJECTID_1 %in% click.list$ids ) , ]
+      
+      # if statement
+      if( is.null( click$id ) ){
+        # check for required values, if true, then the issue
+        # is "silent". See more at: ?req
+        req( click$id )
+        
+      } else if( !click$id %in% lines.of.interest@data$id ){
+        
+        # call the leaflet proxy
+        leaflet::leafletProxy( mapId = "myMap" ) %>%
+          # and add the polygon lines
+          # using the data stored from the lines.of.interest object
+          addPolylines( data = lines.of.interest
+                        , layerId = lines.of.interest@data$id
+                        , color = "#6cb5bc"
+                        , weight = 5
+                        , opacity = 1
+          ) 
+        
+      } # end of if else statement
+      
+    }) # end of shiny::observeEvent({})
+    
+    
+    # Create the logic for the "Clear the map" action button
+    # which will clear the map of all user-created highlights
+    # and display a clean version of the leaflet map
+    shiny::observeEvent( input$clearHighlight, {
+      
+      # recreate $myMap
+      output$myMap <- leaflet::renderLeaflet({
+        
+        # first
+        # set the reactive value of click.list$ids to NULL
+        click.list$ids <- NULL
+        
+        # second
+        # recall the foundational.map() object
+        foundational.map()
+        
+      }) # end of re-rendering $myMap
+      
+    }) # end of clearHighlight action button logic
     
 }
 # Run the application ----------------------------------------------
