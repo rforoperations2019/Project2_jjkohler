@@ -1,4 +1,5 @@
 library(shiny)
+library(leaflet)
 library(shinydashboard)
 library(devtools)
 library(reshape2)
@@ -8,6 +9,7 @@ library(shinythemes)
 library(shinyWidgets)
 library(proj4)
 library(htmltools)
+library(rgdal)
 
 
 # Pulling from an API ---------------------- 
@@ -18,7 +20,7 @@ xy <- a_poll@data %>% select(POINT_X,POINT_Y,OBJECTID_1)
 #assign projection
 proj4string <- "+proj=lcc +lat_1=40.96666666666667 +lat_2=39.93333333333333 +lat_0=39.33333333333334 +lon_0=-77.75 +x_0=600000 +y_0=0 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=us-ft +no_defs"
 #project point data
-pj <- project(xy, proj4string, inverse=TRUE)
+pj <- proj4::project(xy, proj4string, inverse=TRUE)
 #create latlon
 points <- data.frame(xy, lat=pj$y, lon=pj$x)
 #merge
@@ -93,9 +95,9 @@ body <- dashboardBody(
                     width = 8,
                     fluidRow(
                     leaflet::leafletOutput( outputId = "map"
-                                              , height = 800,
+                                              , height = 800
                     ),
-                    fluidRow(h5("<strong>Please Be Patient.</strong> App response time is very slow. After clicking on a layer button don't click twice - wait for original selection to load before proceeding. <br> Click on the loaded map layers to activate plots."))
+                    fluidRow(h5("Please Be Patient. App response time is very slow. After clicking on a layer button don't click twice - wait for original selection to load before proceeding. Click on the loaded map layers to activate plots."))
                   )),
                   column(width = 4,
                     fluidRow(
@@ -184,7 +186,7 @@ observeEvent(input$election, {
                highlightOptions = highlightOptions(weight = 5,
                                                    color = "white",
                                                    fillOpacity = 0.7,
-                                                   bringToFront = TRUE)
+                                                   bringToFront = FALSE)
                , layerId = unique(a_data@data$OBJECTID_1)
                # , group = "click.list"
   )
@@ -206,11 +208,11 @@ observeEvent(input$white, {
                  highlightOptions = highlightOptions(weight = 5,
                                                      color = "white",
                                                      fillOpacity = 0.7,
-                                                     bringToFront = TRUE)
+                                                     bringToFront = FALSE
                  , layerId = unique(a_data@data$OBJECTID_1)
-                 # , group = "click.list"
-    )
-})    
+    ))
+})
+      
 
 blackpal <- colorNumeric(
   c('#383632','#018023'),
@@ -228,7 +230,7 @@ observeEvent(input$black, {
                  highlightOptions = highlightOptions(weight = 5,
                                                      color = "white",
                                                      fillOpacity = 0.7,
-                                                     bringToFront = TRUE)
+                                                     bringToFront = FALSE)
                  , layerId = unique(a_data@data$OBJECTID_1)
                  )
 })    
@@ -244,7 +246,7 @@ observeEvent(input$polls, {
 })    
 
 observeEvent(input$clear, {
-  leafletProxy('map') %>% clearShapes()
+  leafletProxy('map') %>% clearShapes() %>% clearMarkers()
 
 })
 
