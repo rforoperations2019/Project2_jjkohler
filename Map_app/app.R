@@ -34,15 +34,21 @@ sidebar <- dashboardSidebar(
         menuItem("County Map", icon = icon("tree"), tabName = "intro"),
         menuItem("Data Table", icon = icon("table"), tabName = "table"),
         
-        #Year Selection ----------------------------------------------
-        chooseSliderSkin("HTML5", color="SaddleBrown"),
-        sliderInput("slider2", label = h4("Sighting Years"), min = 1920, 
-                    max = 2018, value = c(1920, 2018), sep = ''),
-        
-        #Season Selection --------------------------------------------
+
+        #Map Layer Selection --------------------------------------------
         shiny::actionButton( inputId = "election"
                              , icon = icon( name = "fa-vote-yea")
-                             , label = "Show 2016 Votes"
+                             , label = " 2016 Votes "
+                             , style = "color: #fff; background-color: #D75453; border-color: #C73232"
+        ),
+        shiny::actionButton( inputId = "white"
+                             , icon = icon( name = "fa-vote-yea")
+                             , label = "Percent White"
+                             , style = "color: #fff; background-color: #D75453; border-color: #C73232"
+        ),
+        shiny::actionButton( inputId = "black"
+                             , icon = icon( name = "fa-vote-yea")
+                             , label = "Percent Black"
                              , style = "color: #fff; background-color: #D75453; border-color: #C73232"
         ),
         shiny::actionButton( inputId = "clear"
@@ -70,7 +76,10 @@ sidebar <- dashboardSidebar(
         
         #Class Tooltip ----------------
         bsTooltip(id = "class_button", title = "<strong>Class A</strong><br> <i>Reports of clear sightings.</i><br><br> <strong>Class B</strong><br> <i>Observations without a clear view.</i>",
-                  placement = "bottom", trigger = "hover")
+                  placement = "bottom", trigger = "hover"),
+        
+        downloadButton("downloadData", "Download Data")
+    
     )
 )
 
@@ -100,7 +109,7 @@ body <- dashboardBody(
                   column(
                     width = 10
                     , leaflet::leafletOutput( outputId = "map"
-                                              , height = 850
+                                              , height = 700,
                     )
                   )
                 ) # end of the box
@@ -119,6 +128,15 @@ ui <- dashboardPage(header, sidebar, body, skin='blue')
 
 # Define server function -----
 server <- function(input, output) {
+  
+  output$downloadData <- downloadHandler(
+    filename = function() {
+      paste("Allegheny16-", Sys.Date(), ".csv", sep="")
+    },
+    content = function(file) {
+      write.csv(a_data, file)
+    }
+  )
     
     #Error if no Season is chosen
     observeEvent(input$season, ignoreNULL = FALSE,{
@@ -136,29 +154,8 @@ server <- function(input, output) {
     }
     )
     
-    #Render Sasquatch image for landing page
-    
-    # output$image <- renderImage({
-    #     return(list(
-    #         src = "sasquatch.jpg",
-    #         contentType = 'image/jpeg',
-    #         alt = "Is this Bigfoot?"
-    #     ))
-    # }, deleteFile = FALSE)
-    
+
     # create foundational map
-    
-# Reference: rpubs.com/bhaskarvk/electoral-Map-2016
-    dempal <- colorFactor(c("#2aa1ec", "#fe6a59"), a_data@data$WIN)
-# HTML Labels: https://stackoverflow.com/questions/43144596/r-and-leaflet-how-to-arrange-label-text-across-multiple-lines
-    
-labs <- lapply(seq(nrow(a_data@data)), function(i) {
-  paste0("<strong>", a_data@data[i, "MCD_NAME"],"</strong><br>",
-                a_data@data[i, "VTD_NAME"],"<br><br>",
-                "<strong>Dem: </strong>", a_data@data[i, "X.DEM"]*100, "% <br>",
-                "<strong>Rep: </strong>", a_data@data[i, "X.REP"]*100, "% <br>",
-                "<strong>Oth: </strong>", a_data@data[i, "X.OTH"]*100, "% <br>", sep='') 
-})
 
     foundational.map <- shiny::reactive({
       leaflet(options = leafletOptions(zoomSnap=0.1)) %>%
@@ -166,23 +163,6 @@ labs <- lapply(seq(nrow(a_data@data)), function(i) {
         setView( lng = -79.9959
                  , lat = 40.4406
                  , zoom = 11 ) 
-      # %>%
-        # addPolygons( data = a_data,
-        #              fillColor= ~dempal(WIN),
-        #              fillOpacity = ~ifelse(WIN=='D',(X.DEM),
-        #                                      (X.REP))
-        #              , opacity = ~ifelse(WIN=='D',(X.DEM)-0.2,
-        #                                  (X.REP)-0.2),
-        #              weight = 2,
-        #              color = ~dempal(WIN),
-        #              label= lapply(labs, htmltools::HTML),
-        #              highlightOptions = highlightOptions(weight = 5,
-        #             color = "white",
-        #              fillOpacity = 0.7,
-        #              bringToFront = TRUE)
-        #             , layerId = a_data@polygons
-        #              # , group = "click.list"
-        # )
     })
     
     output$map <- renderLeaflet({
@@ -190,8 +170,23 @@ labs <- lapply(seq(nrow(a_data@data)), function(i) {
       foundational.map()
       
     }) # end of leaflet::renderLeaflet({})
-    # layerId = unique(x$layerId))
-# })
+
+    
+# Reference: rpubs.com/bhaskarvk/electoral-Map-2016
+    dempal <- colorFactor(c("#2aa1ec", "#fe6a59"), a_data@data$WIN)
+# HTML Labels: https://stackoverflow.com/questions/43144596/r-and-leaflet-how-to-arrange-label-text-across-multiple-lines
+    
+labs <- lapply(seq(nrow(a_data@data)), function(i) {
+      paste0("<strong>", a_data@data[i, "MCD_NAME"],"</strong><br>",
+             a_data@data[i, "VTD_NAME"],"<br><br>",
+             "<strong>Dem: </strong>", a_data@data[i, "X.DEM"]*100, "% <br>",
+             "<strong>Rep: </strong>", a_data@data[i, "X.REP"]*100, "% <br>",
+             "<strong>Oth: </strong>", a_data@data[i, "X.OTH"]*100, "% <br>",
+             "<br><strong>White: </strong>", a_data@data[i, "X.WHITE"]*100, "% <br>",
+             "<strong>Black: </strong>", a_data@data[i, "X.BLACK"]*100, "% <br>",
+             sep='') 
+    })
+    
 observeEvent(input$election, {
   leafletProxy('map') %>% clearShapes() %>%
   addPolygons( data = a_data,
@@ -210,6 +205,50 @@ observeEvent(input$election, {
                # , layerId = unique(a_data@data$OBJECTID_1)
                # , group = "click.list"
   )
+})    
+
+whitepal <- colorNumeric(
+  c('#383632','#ffa200'),
+  domain = c(0,1))
+
+observeEvent(input$white, {
+  leafletProxy('map') %>% clearShapes() %>%
+    addPolygons( data = a_data,
+                 fillColor= ~whitepal(X.WHITE),
+                 fillOpacity = ~X.WHITE
+                 , opacity = ~X.WHITE,
+                 weight = 2,
+                 color = "gray",
+                 label= lapply(labs, htmltools::HTML),
+                 highlightOptions = highlightOptions(weight = 5,
+                                                     color = "white",
+                                                     fillOpacity = 0.7,
+                                                     bringToFront = TRUE)
+                 # , layerId = unique(a_data@data$OBJECTID_1)
+                 # , group = "click.list"
+    )
+})    
+
+blackpal <- colorNumeric(
+  c('#383632','#018023'),
+  domain = c(0,1))
+
+observeEvent(input$black, {
+  leafletProxy('map') %>% clearShapes() %>%
+    addPolygons( data = a_data,
+                 fillColor= ~blackpal(X.BLACK),
+                 fillOpacity = ~X.BLACK
+                 , opacity = ~X.BLACK,
+                 weight = 2,
+                 color = "gray",
+                 label= lapply(labs, htmltools::HTML),
+                 highlightOptions = highlightOptions(weight = 5,
+                                                     color = "white",
+                                                     fillOpacity = 0.7,
+                                                     bringToFront = TRUE)
+                 # , layerId = unique(a_data@data$OBJECTID_1)
+                 # , group = "click.list"
+    )
 })    
 
 observeEvent(input$clear, {
